@@ -1,0 +1,111 @@
+# LYSA Orders
+
+A small back-office for B2B orders: customers, orders, and the pricing rules
+agreed with Finance.
+
+- **Server** — Node.js, Express, PostgreSQL
+- **Client** — plain HTML and JavaScript, no framework, no build step
+- **Tests** — the Node built-in test runner, nothing to configure
+
+## Getting started
+
+You need Node 22 or later, and Docker running.
+
+```bash
+npm install
+npm run db:init    # once: starts PostgreSQL, creates the schema, loads demo data
+npm start          # http://localhost:4000
+```
+
+`npm start` brings up the PostgreSQL container and runs the server in the
+foreground. **Ctrl-C stops the server and the container**, leaving nothing
+behind. Your data survives in a Docker volume, so the next start is instant.
+
+It will not create the schema for you: on an empty database it stops and tells
+you to run `npm run db:reset`. A start command that quietly writes to your
+database is one you cannot trust.
+
+```bash
+npm test           # unit tests + API tests (needs the database, with the schema)
+npm run dev        # server only, restarts on file change
+npm run db:reset   # back to the demo data, dropping anything you changed
+npm run db:up      # the container alone, in the background
+npm run db:down    # stop it
+```
+
+`npm run dev` deliberately leaves Docker alone, so watching files does not
+cycle the container on every keystroke — run `npm run db:up` once first.
+
+If you already run PostgreSQL yourself, point the application at it and Docker
+is left out of it entirely:
+
+```bash
+DATABASE_URL=postgres://user:pass@localhost:5432/mydb npm start
+```
+
+Copy `.env.example` to `.env` to make that permanent.
+
+## Your tasks
+
+They are in [`tickets/`](tickets/), numbered in the order to work through them:
+
+```
+1-FEATURE-archive-inactive-customers.md
+2-BUGFIX-invoice-total.md
+3-FEATURE-export-orders-csv.md
+```
+
+Take them one at a time, and wait until your interviewer tells you to open the
+next one.
+
+## What the application does
+
+**Customers** — a searchable grid, a form to create, update and delete a
+customer. A customer with orders cannot be deleted, only archived. Archived
+customers are hidden from the default list.
+
+**Orders** — a grid of orders with their totals, and a detail panel showing the
+lines and the breakdown of the calculation.
+
+**Pricing** — the interesting part, in [`src/pricing.js`](src/pricing.js):
+
+1. Volume discount, per line: 5 % from 10 units, 10 % from 50, 15 % from 100.
+2. The customer's contract discount applies after the volume discount.
+3. VAT 8 % is applied last, on the discounted total.
+4. Amounts are in dong and rounded to the dong.
+
+## Layout
+
+```
+src/
+  start.js         npm start: container, schema, server, Ctrl-C teardown
+  server.js        the HTTP server on its own
+  app.js           builds the Express application
+  db.js            the PostgreSQL pool
+  pricing.js       the pricing rules
+  routes/
+    customers.js   /api/customers
+    orders.js      /api/orders
+public/            the client: index.html, app.js, styles.css
+db/
+  schema.sql       tables
+  seed.sql         demo data
+  reset.js         npm run db:reset
+test/              node --test
+```
+
+## API
+
+| | |
+| --- | --- |
+| `GET /api/customers?search=&includeArchived=` | list, archived hidden by default |
+| `GET /api/customers/:id` | one customer, with its order count |
+| `POST /api/customers` | create |
+| `PUT /api/customers/:id` | update, fields are optional |
+| `DELETE /api/customers/:id` | refused with a 409 if the customer has orders |
+| `GET /api/orders?customerId=` | list, totals included |
+| `GET /api/orders/:id` | one order, with its lines and its totals |
+| `GET /api/products` | the catalogue |
+
+Amounts are integers, in dong. Rates are percentages: `contractDiscountRate: 10`
+means 10 %.
